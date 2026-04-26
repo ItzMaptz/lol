@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini Drive Pro</title>
+
+<style>
+/* =========================
+   VARIABLES Y RESET
+========================= */
+:root{
+  --bg:#0f172a;
+  --panel:#111827;
+  --card:#1f2937;
+  --accent:#22c55e;
+  --text:#e5e7eb;
+  --muted:#9ca3af;
+  --danger:#ef4444;
+}
+
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+  font-family:system-ui, sans-serif;
+}
+
+body{
+  background:var(--bg);
+  color:var(--text);
+}
+
+/* =========================
+   LAYOUT
+========================= */
+header{
+  padding:20px;
+  text-align:center;
+  background:var(--panel);
+  border-bottom:1px solid #333;
+}
+
+h1{
+  font-size:28px;
+}
+
+.container{
+  padding:20px;
+  max-width:1100px;
+  margin:auto;
+}
+
+/* =========================
+   CONTROLES
+========================= */
+.controls{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-bottom:20px;
+}
+
+input, select, button{
+  padding:10px;
+  border:none;
+  border-radius:8px;
+}
+
+input, select{
+  background:#020617;
+  color:white;
+}
+
+button{
+  background:var(--accent);
+  cursor:pointer;
+}
+
+button:hover{
+  opacity:0.85;
+}
+
+.btn-danger{
+  background:var(--danger);
+}
+
+/* =========================
+   PROGRESS BAR
+========================= */
+.progress{
+  width:100%;
+  background:#020617;
+  border-radius:10px;
+  margin-top:10px;
+  overflow:hidden;
+  display:none;
+}
+
+.progress-bar{
+  height:10px;
+  width:0%;
+  background:var(--accent);
+  transition:0.2s;
+}
+
+/* =========================
+   ARCHIVOS
+========================= */
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(200px,1fr));
+  gap:15px;
+}
+
+.list{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.file{
+  background:var(--card);
+  padding:15px;
+  border-radius:12px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  position:relative;
+}
+
+.file small{
+  color:var(--muted);
+}
+
+.file-actions{
+  display:flex;
+  justify-content:space-between;
+  margin-top:10px;
+}
+
+.tag{
+  font-size:11px;
+  padding:2px 6px;
+  border-radius:5px;
+  background:#374151;
+}
+
+/* =========================
+   TOAST
+========================= */
+.toast{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  background:#020617;
+  padding:12px 18px;
+  border-radius:10px;
+  opacity:0;
+  transform:translateY(20px);
+  transition:0.3s;
+}
+
+.toast.show{
+  opacity:1;
+  transform:translateY(0);
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>Mini Drive Pro (HTML)</h1>
+  <p>Simulación avanzada con almacenamiento local</p>
+</header>
+
+<div class="container">
+
+  <!-- CONTROLES -->
+  <div class="controls">
+    <input type="file" id="fileInput">
+    <button onclick="subir()">Subir</button>
+
+    <input type="text" id="buscar" placeholder="Buscar..." oninput="render()">
+
+    <select id="orden" onchange="render()">
+      <option value="fecha">Más recientes</option>
+      <option value="nombre">Nombre</option>
+      <option value="peso">Peso</option>
+    </select>
+
+    <button onclick="toggleVista()">Cambiar vista</button>
+    <button class="btn-danger" onclick="limpiar()">Borrar todo</button>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="progress" id="progress">
+    <div class="progress-bar" id="bar"></div>
+  </div>
+
+  <!-- ARCHIVOS -->
+  <div id="archivos" class="grid"></div>
+
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+/* =========================
+   ESTADO
+========================= */
+let archivos = JSON.parse(localStorage.getItem("archivos")) || [];
+let vistaGrid = true;
+
+/* =========================
+   UTILIDADES
+========================= */
+function guardar(){
+  localStorage.setItem("archivos", JSON.stringify(archivos));
+}
+
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.innerText = msg;
+  t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"),2000);
+}
+
+function formatSize(bytes){
+  return (bytes/1024).toFixed(2)+" KB";
+}
+
+/* =========================
+   SUBIR ARCHIVO
+========================= */
+function subir(){
+  const input = document.getElementById("fileInput");
+  const file = input.files[0];
+  if(!file) return alert("Selecciona archivo");
+
+  const bar = document.getElementById("bar");
+  const prog = document.getElementById("progress");
+
+  prog.style.display="block";
+  bar.style.width="0%";
+
+  let progreso = 0;
+
+  let intervalo = setInterval(()=>{
+    progreso+=10;
+    bar.style.width = progreso+"%";
+
+    if(progreso>=100){
+      clearInterval(intervalo);
+
+      const url = URL.createObjectURL(file);
+
+      archivos.push({
+        nombre:file.name,
+        size:file.size,
+        tipo:file.type || "desconocido",
+        fecha:Date.now(),
+        url
+      });
+
+      guardar();
+      render();
+      prog.style.display="none";
+      toast("Archivo subido");
+    }
+  },100);
+}
+
+/* =========================
+   ELIMINAR
+========================= */
+function eliminar(i){
+  if(!confirm("¿Eliminar archivo?")) return;
+  archivos.splice(i,1);
+  guardar();
+  render();
+}
+
+/* =========================
+   LIMPIAR TODO
+========================= */
+function limpiar(){
+  if(!confirm("Borrar TODO?")) return;
+  archivos=[];
+  guardar();
+  render();
+}
+
+/* =========================
+   CAMBIAR VISTA
+========================= */
+function toggleVista(){
+  vistaGrid = !vistaGrid;
+  render();
+}
+
+/* =========================
+   RENDER
+========================= */
+function render(){
+  const cont = document.getElementById("archivos");
+  const busqueda = document.getElementById("buscar").value.toLowerCase();
+  const orden = document.getElementById("orden").value;
+
+  let lista = archivos.filter(a=>a.nombre.toLowerCase().includes(busqueda));
+
+  if(orden==="nombre"){
+    lista.sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  }else if(orden==="peso"){
+    lista.sort((a,b)=>b.size-a.size);
+  }else{
+    lista.sort((a,b)=>b.fecha-a.fecha);
+  }
+
+  cont.className = vistaGrid ? "grid" : "list";
+  cont.innerHTML="";
+
+  lista.forEach((a,i)=>{
+    const div = document.createElement("div");
+    div.className="file";
+
+    div.innerHTML=`
+      <strong>${a.nombre}</strong>
+      <small>${formatSize(a.size)}</small>
+      <small>${new Date(a.fecha).toLocaleString()}</small>
+      <span class="tag">${a.tipo}</span>
+
+      <div class="file-actions">
+        <a href="${a.url}" download>Descargar</a>
+        <button class="btn-danger" onclick="eliminar(${i})">X</button>
+      </div>
+    `;
+
+    cont.appendChild(div);
+  });
+}
+
+/* =========================
+   INIT
+========================= */
+render();
+</script>
+
+</body>
+</html>
